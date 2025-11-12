@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.UUID;
 
 @Component
 @Order(1)
@@ -49,28 +51,35 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
 
         log.info("Content type: {}", request.getContentType());
 
+        //Skip non-loggable content types
         if (request.getContentType() != null && SKIPPED_CONTENT_TYPES.stream().anyMatch(request.getContentType()::startsWith)) {
             log.warn("Skipping logging for content type: {}", request.getContentType());
             filterChain.doFilter(request, response);
             return;
         }
 
+        long startTime = System.nanoTime();
+
+        //Generate unique request ID and add to MDC and response header
+        String requestId = UUID.randomUUID().toString().replace("-", "").substring(0, 15);
+        MDC.put("req-id", requestId);
+        response.setHeader("X-Request-ID", requestId);
+
         BufferedRequestWrapper requestWrapper = new BufferedRequestWrapper(request);
         BufferedResponseWrapper responseWrapper = new BufferedResponseWrapper(response);
 
-        long startTime = System.currentTimeMillis();
         try {
-            logRequest(requestWrapper);
+            logRequest(requestWrapper,requestId);
             filterChain.doFilter(requestWrapper, responseWrapper);
-
         } finally {
-            long duration = System.currentTimeMillis() - startTime;
-            logResponse(responseWrapper, duration);
+            long duration = (System.nanoTime() - startTime) / 1_000_000;
+            logResponse(responseWrapper, duration, requestId);
+            MDC.clear();
         }
 
     }
 
-    private void logResponse(BufferedResponseWrapper responseWrapper, long duration) {
+    private void logResponse(BufferedResponseWrapper responseWrapper, long duration, String requestId) {
         try {
             String responseBody = truncate(maskSensitiveData(new String(responseWrapper.getCopy())));
 
@@ -81,7 +90,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
             } else {
                 responseMap.put("RESPONSE BODY", new JSONObject(responseBody).toMap());
             }
-            responseMap.put("RESPONSE TIME", duration);
+            responseMap.put("RESPONSE TIME", duration + " ms");
 
             log.info(
                     "[Response]: {}",
@@ -92,7 +101,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         }
     }
 
-    private void logRequest(BufferedRequestWrapper requestWrapper) {
+    private void logRequest(BufferedRequestWrapper requestWrapper,String requestId) {
         try {
             String requestBody = truncate(maskSensitiveData(requestWrapper.getRequestBody()));
 
