@@ -49,8 +49,6 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
             return;
         }
 
-        log.info("Content type: {}", request.getContentType());
-
         //Skip non-loggable content types
         if (request.getContentType() != null && SKIPPED_CONTENT_TYPES.stream().anyMatch(request.getContentType()::startsWith)) {
             log.warn("Skipping logging for content type: {}", request.getContentType());
