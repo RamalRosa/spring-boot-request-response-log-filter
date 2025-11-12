@@ -65,11 +65,12 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         MDC.put("req-id", requestId);
         response.setHeader("X-Request-ID", requestId);
 
+        //Wrap request and response to enable multiple reads
         BufferedRequestWrapper requestWrapper = new BufferedRequestWrapper(request);
         BufferedResponseWrapper responseWrapper = new BufferedResponseWrapper(response);
 
         try {
-            logRequest(requestWrapper,requestId);
+            logRequest(requestWrapper, requestId);
             filterChain.doFilter(requestWrapper, responseWrapper);
         } finally {
             long duration = (System.nanoTime() - startTime) / 1_000_000;
@@ -79,6 +80,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
 
     }
 
+    // Log the response details
     private void logResponse(BufferedResponseWrapper responseWrapper, long duration, String requestId) {
         try {
             String responseBody = truncate(maskSensitiveData(new String(responseWrapper.getCopy())));
@@ -101,7 +103,8 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         }
     }
 
-    private void logRequest(BufferedRequestWrapper requestWrapper,String requestId) {
+    // Log the request details
+    private void logRequest(BufferedRequestWrapper requestWrapper, String requestId) {
         try {
             String requestBody = truncate(maskSensitiveData(requestWrapper.getRequestBody()));
 
@@ -124,6 +127,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         }
     }
 
+    // Truncate long strings to the maximum allowed length
     private String truncate(String value) {
         if (value == null) return null;
         return value.length() > maxBodyLength
@@ -131,10 +135,10 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
                 : value;
     }
 
+    // Mask sensitive data in the content
     private String maskSensitiveData(String content) {
         if (content == null) return null;
 
-        // Mask sensitive JSON fields like password, token, otp, etc.
         return content
                 .replaceAll("(?i)(\"password\"\\s*:\\s*\").*?(\")", "$1***$2")
                 .replaceAll("(?i)(\"token\"\\s*:\\s*\").*?(\")", "$1***$2")
