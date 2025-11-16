@@ -14,13 +14,18 @@ import java.util.Map;
 @RequestMapping("/test")
 public class TestController {
     @PostMapping("/hello")
-//    public Map<String, String> hello(@RequestBody @Valid TestRequest testRequest) {
-//        HashMap<String, String> map = new HashMap<>();
-//        map.put("greeting", "Hello, " + testRequest.getName() + " !");
-//        return map;
-//    }
+    public Map<String, Object> hello(@RequestBody @Valid TestRequest testRequest) {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("greeting", "Hello world !");
+        map.put("data", testRequest);
+        return map;
+    }
 
-    public TestRequest hello(@RequestBody @Valid TestRequest testRequest) {
-        return testRequest;
+    @PostMapping("/doc")
+    public Map<String, Object> hello() {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("status", "ok");
+        map.put("data", new Byte[1000]);
+        return map;
     }
 }

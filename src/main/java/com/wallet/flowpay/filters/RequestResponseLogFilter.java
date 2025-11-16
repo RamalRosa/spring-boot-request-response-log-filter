@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +60,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         long startTime = System.nanoTime();
 
         //Generate unique request ID and add to MDC and response header
-        String requestId = UUID.randomUUID().toString().replace("-", "").substring(0, 15);
+        String requestId = request.getHeader("X-Request-ID") == null ? UUID.randomUUID().toString().replace("-", "").substring(0, 15) : request.getHeader("X-Request-ID");
         MDC.put("req-id", requestId);
         response.setHeader("X-Request-ID", requestId);
 
@@ -68,7 +69,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         BufferedResponseWrapper responseWrapper = new BufferedResponseWrapper(response);
 
         try {
-            logRequest(requestWrapper, requestId);
+            logRequest(requestWrapper);
             filterChain.doFilter(requestWrapper, responseWrapper);
         } finally {
             long duration = (System.nanoTime() - startTime) / 1_000_000;
@@ -88,7 +89,7 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
             if (responseBody == null || responseBody.isBlank()) {
                 responseMap.put("RESPONSE BODY", null);
             } else {
-                responseMap.put("RESPONSE BODY", new JSONObject(responseBody).toMap());
+                responseMap.put("RESPONSE BODY", safeJson(responseBody));
             }
             responseMap.put("RESPONSE TIME", duration + " ms");
 
@@ -101,8 +102,23 @@ public class RequestResponseLogFilter extends OncePerRequestFilter {
         }
     }
 
+    private Object safeJson(String body) {
+        if (body == null || body.isBlank()) return null;
+
+        try {
+            return new JSONObject(body).toMap();   // Try parse object
+        } catch (Exception ex1) {
+            try {
+                return new JSONArray(body).toList(); // Try parse array
+            } catch (Exception ex2) {
+                return body; // Fallback to plain string
+            }
+        }
+    }
+
+
     // Log the request details
-    private void logRequest(BufferedRequestWrapper requestWrapper, String requestId) {
+    private void logRequest(BufferedRequestWrapper requestWrapper) {
         try {
             String requestBody = truncate(maskSensitiveData(requestWrapper.getRequestBody()));
 
